@@ -2,7 +2,7 @@
 
 This MVP predicts ICD-10 codes from user input.
 
-The app uses a locally running whisper-base model (OpenAI) to transcribe audio to text. To predict ICD-10 codes a prompt engenieered DeepSeek-V3 API call is used.
+The app uses a locally running whisper model (OpenAI) to transcribe audio to text. To predict ICD-10 codes a prompt engenieered DeepSeek-V3 is called via the OpenAI API.
 
 
 **Input panels**
