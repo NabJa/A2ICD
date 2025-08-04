@@ -1,4 +1,4 @@
-# MVP Demo App
+# Audio-to-ICD *(A2ICD)*
 
 This MVP predicts ICD-10 codes from user input.
 
