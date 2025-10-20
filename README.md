@@ -1,9 +1,9 @@
 # Audio-to-ICD *(A2ICD)*
 
-This MVP predicts ICD-10 codes from user input.
 
-The app uses a locally running whisper model (OpenAI) to transcribe audio to text. To predict ICD-10 codes a prompt engenieered DeepSeek-V3 is called via the OpenAI API.
+**➡️ Checkout running model on HuggingFace 🤗: [NabJab/A2ICD](https://huggingface.co/spaces/NabJab/A2ICD).**
 
+The app uses whisper-1 (OpenAI) and gpt-4.1 to transcribe audio to text. To predict ICD-10 codes gpt-4.1 is used with a database lookup.
 
 **Input panels**
 The Audio input panel allows users to record audio and transcribe it, while the Text input panel allows users to enter text directly.
@@ -17,11 +17,8 @@ The Output panel displays the predicted ICD-10 codes and links them to the ICD w
 ## How to run
 **1. Setup API key(s)**
 
-Create a *api_keys.yml* file in the root directory with the following content:
-```yaml
-deepseek:
-    - <your_deepseek_api_key>
-```
+Create a *.env* file in the root directory with the following content:
+```OPENAI_API_KEY="your_openai_api_key"```
 
 **2. Run app**
 - Option 1: Using uv (recommended): `uv run mvp.py`
