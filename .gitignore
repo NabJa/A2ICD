@@ -1,5 +1,5 @@
-# !IMPORTANT! API keys configuration file
-api_keys.yml
+# API keys for LLMs
+.env
 
 # Auto-generated virtual environment used by uv
 .venv
