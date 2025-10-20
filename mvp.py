@@ -1,30 +1,43 @@
 import gradio as gr
 import requests
-import torch
-import torchaudio
-import yaml
+from dotenv import load_dotenv
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers.string import StrOutputParser
 from openai import OpenAI
-from transformers import (
-    WhisperForConditionalGeneration,
-    WhisperProcessor,
-)
+
+load_dotenv()
+
+# Initialize OpenAI client for audio and transcription
+openai_client = OpenAI()
+
+# Initialize language model
+llm = init_chat_model("openai:gpt-4.1") | StrOutputParser()
 
 
-def get_api_key(source="deepseek"):
-    with open("api_keys.yml") as stream:
-        api_keys = yaml.safe_load(stream)
-        return api_keys[source]
+def transcribe(audio: str) -> str:
+    """Transcribe the given audio file using OpenAI's Whisper model."""
+    with open(audio, "rb") as file:
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1", file=file
+        )
+        transcribed = transcript.text
 
+    system_prompt = """
+        You are an AI agent that corrects transciped medical text for any errors.
+        Only return the corrected text, nothing else. If the text is correct, return it as is.
+        E.g.:
+            User: The patient has a history of diabetis and hypertenzion.
+            Agent: The patient has a history of diabetes and hypertension.
+        """
 
-whisper_id = "openai/whisper-large-v2"  # "openai/whisper-base"
+    messages = [
+        SystemMessage(system_prompt),
+        HumanMessage(content=transcribed),
+    ]
+    response = llm.invoke(messages)
 
-client = OpenAI(
-    api_key=get_api_key("deepseek"),
-    base_url="https://api.deepseek.com",
-)
-
-audio_processor = WhisperProcessor.from_pretrained("openai/whisper-base")
-audio_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-base")
+    return response
 
 
 def check_icd_link(code):
@@ -50,28 +63,28 @@ def check_icd_link(code):
     return new_code, code
 
 
-def predict_icd(text):
+def predict_icd(text: str) -> str:
+    """Predict ICD-10 codes from the given text using the language model."""
+
+    system_prompt = """
+        You are a AI agent that extracts the most relevant ICD-10 code(s) for a given condition.
+        Only return the five most relevant ICD-10 codes as a comma-separated list, nothing else.
+
+        E.g.:
+            User: Hypertension and diabetes mellitus.
+            Agent: I10, I11.9, I12.9, E10.9, E11.9
+    """
+
     messages = [
-        {
-            "role": "system",
-            "content": "You are an expert medical assistant. Extract the most relevant ICD-10 code(s) for the following condition. Only return the five most relevant ICD-10 codes, nothing else.",
-        },
-        {"role": "user", "content": f"Condition: {text}"},
-        {"role": "system", "content": "Comma-separated 5 most relevant ICD-10 codes:"},
+        SystemMessage(system_prompt),
+        HumanMessage(content=text),
     ]
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=messages,
-        max_tokens=1024,
-        temperature=0.2,
-        stream=False,
-    )
+
+    response = llm.invoke(messages)
 
     # Extract the ICD-10 codes from the response
-    icd_codes = response.choices[0].message.content.split(", ")
-
     # Make sure its only five codes
-    icd_codes = icd_codes[:5]
+    icd_codes = response.split(", ")[:5]
 
     # Make sure the ICD-10 codes are valid links
     valid_codes = [check_icd_link(c) for c in icd_codes]
@@ -88,63 +101,11 @@ def predict_icd(text):
     return icd_markdown
 
 
-def transcribe(audio, language="en-en"):
-    if language == "de-de":
-        forced_decoder_ids = audio_processor.get_decoder_prompt_ids(
-            task="transcribe", language="german"
-        )
-    elif language == "de-en":
-        forced_decoder_ids = audio_processor.get_decoder_prompt_ids(
-            task="translate", language="english"
-        )
-    elif language == "en-en":
-        forced_decoder_ids = audio_processor.get_decoder_prompt_ids(
-            task="transcribe", language="english"
-        )
-    else:
-        forced_decoder_ids = audio_processor.get_decoder_prompt_ids()
-
-    sr, y = audio
-
-    y = torch.tensor(y, dtype=torch.float32)
-
-    # Convert to mono if stereo
-    if y.ndim > 1:
-        y = y.mean(dim=1)
-
-    # Resample to 16kHz if needed
-    target_sr = 16_000
-    if sr != target_sr:
-        y = torchaudio.functional.resample(y, sr, target_sr)
-        sr = target_sr
-
-    y /= torch.max(torch.abs(y))
-
-    inputs = audio_processor(y, sampling_rate=sr, return_tensors="pt")
-
-    predicted_ids = audio_model.generate(
-        inputs.input_features,
-        forced_decoder_ids=forced_decoder_ids,
-        pad_token_id=audio_processor.tokenizer.eos_token_id,
-    )
-
-    transcription = audio_processor.batch_decode(
-        predicted_ids, skip_special_tokens=True
-    )
-
-    text = transcription[0]
-
-    return text  # Return transcription
-
-
 if __name__ == "__main__":
     with gr.Blocks() as demo:
         with gr.Row(equal_height=True):
             with gr.Column():
-                audio_input = gr.Audio(sources="microphone", label="Input Audio")
-                language_radio = gr.Radio(
-                    ["de-de", "de-en", "en-en"], value="en-en", label="Language"
-                )
+                audio_input = gr.Audio(type="filepath", label="Upload or record audio")
                 transcribe_btn = gr.Button("Transcribe")
             with gr.Column():
                 transcribed_text = gr.Textbox(
@@ -157,7 +118,7 @@ if __name__ == "__main__":
         # Button for transcription
         transcribe_btn.click(
             fn=transcribe,
-            inputs=[audio_input, language_radio],
+            inputs=[audio_input],
             outputs=[transcribed_text],
         )
 
