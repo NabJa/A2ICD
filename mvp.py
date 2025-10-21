@@ -1,10 +1,11 @@
-import gradio as gr
-import requests
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers.string import StrOutputParser
 from openai import OpenAI
+
+from icd import format_top_k_icd_codes
+from interface import run_interface
 
 load_dotenv()
 
@@ -40,29 +41,6 @@ def transcribe(audio: str) -> str:
     return response
 
 
-def check_icd_link(code):
-    # Construct the URL for checking the existence of the ICD code
-    url = f"https://icd.who.int/browse10/2019/en/JsonGetParentConceptIDsToRoot?ConceptId={code}"
-    response = requests.get(url, verify=False)
-
-    new_code = code
-
-    # Check if the response is valid and not null or empty
-    if response.status_code == 200:
-        data = response.json()
-        i = len(code) - 1
-        while not data:
-            new_code = code[:i]
-            url = f"https://icd.who.int/browse10/2019/en/JsonGetParentConceptIDsToRoot?ConceptId={new_code}"
-            response = requests.get(url, verify=False)
-            data = response.json()
-            i -= 1
-            if i == 0:
-                break
-
-    return new_code, code
-
-
 def predict_icd(text: str) -> str:
     """Predict ICD-10 codes from the given text using the language model."""
 
@@ -82,51 +60,8 @@ def predict_icd(text: str) -> str:
 
     response = llm.invoke(messages)
 
-    # Extract the ICD-10 codes from the response
-    # Make sure its only five codes
-    icd_codes = response.split(", ")[:5]
-
-    # Make sure the ICD-10 codes are valid links
-    valid_codes = [check_icd_link(c) for c in icd_codes]
-
-    icd_markdown = f"""
-    <div style="border: 1px solid #ccc; padding: 10px; border-radius: 5px; background-color: #1f2937;">
-        <strong>ICD-10 Codes:</strong>
-        <ul>
-            {"".join([f'<li><a href="https://icd.who.int/browse10/2019/en#/{code_link}" target="_blank">{code_name}</a></li>' for code_link, code_name in valid_codes])}
-        </ul>
-    </div>
-    """
-
-    return icd_markdown
+    return format_top_k_icd_codes(response, k=5)
 
 
 if __name__ == "__main__":
-    with gr.Blocks() as demo:
-        with gr.Row(equal_height=True):
-            with gr.Column():
-                audio_input = gr.Audio(type="filepath", label="Upload or record audio")
-                transcribe_btn = gr.Button("Transcribe")
-            with gr.Column():
-                transcribed_text = gr.Textbox(
-                    label="Transcribed", interactive=True
-                )  # Now editable!
-                icd_btn = gr.Button("Get ICD-10 Codes")
-            with gr.Column():
-                icd10_codes = gr.Markdown(label="ICD-10 Code(s)")
-
-        # Button for transcription
-        transcribe_btn.click(
-            fn=transcribe,
-            inputs=[audio_input],
-            outputs=[transcribed_text],
-        )
-
-        # Button for ICD-10 prediction
-        icd_btn.click(
-            fn=predict_icd,
-            inputs=[transcribed_text],
-            outputs=[icd10_codes],
-        )
-
-    demo.launch(debug=False, share=False)
+    run_interface(transcribe, predict_icd)
