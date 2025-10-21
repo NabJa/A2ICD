@@ -3,3 +3,6 @@
 
 # Auto-generated virtual environment used by uv
 .venv
+
+# Python cache files
+__pycache__/
