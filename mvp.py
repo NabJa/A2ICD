@@ -1,9 +1,11 @@
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
+from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers.string import StrOutputParser
 from openai import OpenAI
 
+from create_vector_store import load_vector_store
 from icd import format_top_k_icd_codes
 from interface import run_interface
 
@@ -41,20 +43,28 @@ def transcribe(audio: str) -> str:
     return response
 
 
-def predict_icd(text: str) -> str:
+def predict_icd(text: str, vector_store: Chroma) -> str:
     """Predict ICD-10 codes from the given text using the language model."""
 
     system_prompt = """
         You are a AI agent that extracts the most relevant ICD-10 code(s) for a given condition.
+        You are given some context containing ICD-10 codes and their descriptions.
         Only return the five most relevant ICD-10 codes as a comma-separated list, nothing else.
 
         E.g.:
             User: Hypertension and diabetes mellitus.
             Agent: I10, I11.9, I12.9, E10.9, E11.9
+
+        Context:
+        {context}
     """
 
+    context = vector_store.similarity_search(text, k=10)
+    context = "\n".join([doc.page_content for doc in context])
+    system_prompt = system_prompt.format(context=context)
+
     messages = [
-        SystemMessage(system_prompt),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=text),
     ]
 
@@ -64,4 +74,10 @@ def predict_icd(text: str) -> str:
 
 
 if __name__ == "__main__":
+    from functools import partial
+
+    vector_store = load_vector_store()
+
+    predict_icd = partial(predict_icd, vector_store=vector_store)
+
     run_interface(transcribe, predict_icd)

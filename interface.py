@@ -1,7 +1,7 @@
 import gradio as gr
 
 
-def run_interface(transcribe, predict_icd):
+def run_interface(transcribe, predict_icd) -> None:
     """Run the Gradio interface for audio transcription and ICD-10 code prediction."""
 
     with gr.Blocks() as demo:

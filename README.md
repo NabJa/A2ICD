@@ -25,6 +25,9 @@ Create a *.env* file in the root directory with the following content:
 - Option 2: Using python
    - Install dependencies: `pip install -r requirements.txt`
    -  Run: `python mvp.py`
+- Option 3: Using Docker
+   - Build the Docker image: `docker build -t a2icd .`
+   - Run the Docker container: `docker run -p 7860:7860 --env-file .env a2icd`
 
 **3. Open in browser**
 Go to http://localhost:7860
